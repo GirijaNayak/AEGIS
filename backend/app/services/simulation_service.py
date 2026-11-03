@@ -254,7 +254,14 @@ class SimulationService:
                 sw = decisions.line_switches.get(line.id, True)
                 line.operational_status = OperationalStatus.OPERATIONAL if sw else OperationalStatus.OFFLINE
 
-        # 3. Recalculate load distribution
+        # 3. Apply consumer curtailment to nominal demand
+        for cons in self.current_network.consumers:
+            if cons.nominal_demand is None:
+                cons.nominal_demand = cons.demand
+            curtail_frac = decisions.consumer_curtailment.get(cons.id, 0.0)
+            cons.demand = round(cons.nominal_demand * (1.0 - curtail_frac), 2)
+
+        # 4. Recalculate load distribution
         self.metrics = calculate_load_distribution(self.current_network)
         after_metrics = self.metrics.model_dump()
 

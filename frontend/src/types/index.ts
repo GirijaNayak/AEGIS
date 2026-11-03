@@ -57,10 +57,12 @@ export interface Consumer {
   name: string;
   category: ConsumerCategory;
   demand: number;
+  nominal_demand?: number;
   supplied_power: number;
   criticality: CriticalityLevel;
   priority: number;
   connected_substation_id: string;
+  backup_substation_id?: string;
   operational_status: OperationalStatus;
   position: Position;
 }

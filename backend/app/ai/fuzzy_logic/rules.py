@@ -57,7 +57,7 @@ FUZZY_RULE_BASE: List[FuzzyRule] = [
     FuzzyRule(5, "high", "average", "normal", "high", "IF Load is High AND Health is Average THEN Risk is High"),
     FuzzyRule(6, "medium", "poor", "elevated", "high", "IF Load is Medium, Health is Poor AND Temp is Elevated THEN Risk is High"),
     FuzzyRule(7, "medium", "poor", "normal", "high", "IF Load is Medium AND Health is Poor THEN Risk is High"),
-    FuzzyRule(8, "low", "poor", "critical", "high", "IF Health is Poor AND Temp is Critical THEN Risk is High"),
+    FuzzyRule(8, "low", "poor", "elevated", "high", "IF Load is Low, Health is Poor AND Temp is Elevated THEN Risk is High"),
     FuzzyRule(9, "any", "average", "critical", "high", "IF Health is Average AND Temp is Critical THEN Risk is High"),
     FuzzyRule(10, "high", "good", "elevated", "high", "IF Load is High, Health is Good AND Temp is Elevated THEN Risk is High"),
 

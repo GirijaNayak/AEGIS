@@ -10,18 +10,20 @@ def trimf(x: float, params: Tuple[float, float, float]) -> float:
     """
     Triangular membership function.
     params = (a, b, c) where a <= b <= c
+    Handles shoulders when a == b or b == c.
     """
-    a, b, c = params
-    if x <= a or x >= c:
+    a, b, c = float(params[0]), float(params[1]), float(params[2])
+    x = float(x)
+    if a == b and x <= b:
+        return 1.0
+    if b == c and x >= c:
+        return 1.0
+    if x < a or x > c:
         return 0.0
-    if a < x <= b:
-        if b == a:
-            return 1.0
-        return (x - a) / (b - a)
-    if b < x < c:
-        if c == b:
-            return 1.0
-        return (c - x) / (c - b)
+    if a <= x <= b:
+        return 1.0 if a == b else (x - a) / (b - a)
+    if b < x <= c:
+        return 1.0 if b == c else (c - x) / (c - b)
     return 0.0
 
 
@@ -29,20 +31,24 @@ def trapmf(x: float, params: Tuple[float, float, float, float]) -> float:
     """
     Trapezoidal membership function.
     params = (a, b, c, d) where a <= b <= c <= d
+    Handles left shoulder when a == b and right shoulder when c == d.
     """
-    a, b, c, d = params
-    if x <= a or x >= d:
+    a, b, c, d = float(params[0]), float(params[1]), float(params[2]), float(params[3])
+    x = float(x)
+    # Left shoulder: core extends to left boundary
+    if a == b and x <= b:
+        return 1.0
+    # Right shoulder: core extends to right boundary
+    if c == d and x >= c:
+        return 1.0
+    if x < a or x > d:
         return 0.0
-    if a < x < b:
-        if b == a:
-            return 1.0
-        return (x - a) / (b - a)
+    if a <= x < b:
+        return 1.0 if a == b else (x - a) / (b - a)
     if b <= x <= c:
         return 1.0
-    if c < x < d:
-        if d == c:
-            return 1.0
-        return (d - x) / (d - c)
+    if c < x <= d:
+        return 1.0 if c == d else (d - x) / (d - c)
     return 0.0
 
 

@@ -89,10 +89,12 @@ class Consumer(BaseModel):
     name: str
     category: ConsumerCategory
     demand: float = Field(..., description="Electricity demand in MW")
+    nominal_demand: Optional[float] = Field(default=None, description="Original baseline demand prior to any curtailment")
     supplied_power: float = Field(default=0.0, description="Current supplied power in MW")
     criticality: CriticalityLevel = CriticalityLevel.MEDIUM
     priority: int = Field(default=3, ge=1, le=5, description="1 is highest priority (Hospital), 5 is lowest (Industrial)")
     connected_substation_id: str
+    backup_substation_id: Optional[str] = Field(default=None, description="Dual-feeder backup substation ID for critical services")
     operational_status: OperationalStatus = OperationalStatus.OPERATIONAL
     position: Position
 

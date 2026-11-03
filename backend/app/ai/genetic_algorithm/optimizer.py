@@ -81,21 +81,8 @@ def optimize_recovery_strategy(
 
     # 2. Evolutionary Loop
     for gen in range(config.generations):
-        # Sort population descending by fitness
+        # Sort current population descending by fitness
         population.sort(key=lambda c: c.fitness, reverse=True)
-        best_ind = population[0]
-
-        avg_fit = sum(c.fitness for c in population) / len(population)
-        generations_history.append(
-            GenerationMetric(
-                generation=gen + 1,
-                best_fitness=round(best_ind.fitness, 4),
-                average_fitness=round(avg_fit, 4),
-                best_cost=round(best_ind.total_cost, 2),
-                unserved_demand_mw=round(best_ind.unserved_demand, 2),
-                critical_unserved_mw=round(best_ind.critical_unserved, 2),
-            )
-        )
 
         # Elitism: preserve top k individuals
         new_population: List[RecoveryChromosome] = [
@@ -120,9 +107,21 @@ def optimize_recovery_strategy(
                 new_population.append(c2)
 
         population = new_population
+        population.sort(key=lambda c: c.fitness, reverse=True)
+        best_ind = population[0]
+        avg_fit = sum(c.fitness for c in population) / len(population)
 
-    # Final sort
-    population.sort(key=lambda c: c.fitness, reverse=True)
+        generations_history.append(
+            GenerationMetric(
+                generation=gen + 1,
+                best_fitness=round(best_ind.fitness, 4),
+                average_fitness=round(avg_fit, 4),
+                best_cost=round(best_ind.total_cost, 2),
+                unserved_demand_mw=round(best_ind.unserved_demand, 2),
+                critical_unserved_mw=round(best_ind.critical_unserved, 2),
+            )
+        )
+
     best_chromosome = population[0]
 
     # 3. Constraint Validation

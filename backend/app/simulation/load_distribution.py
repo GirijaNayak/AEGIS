@@ -72,9 +72,21 @@ def calculate_load_distribution(network: InfrastructureNetwork) -> SimulationMet
     substation_demand: Dict[str, float] = {sub.id: 0.0 for sub in network.substations}
 
     for consumer in network.consumers:
-        if consumer.connected_substation_id in substation_consumers:
-            substation_consumers[consumer.connected_substation_id].append(consumer)
-            substation_demand[consumer.connected_substation_id] += consumer.demand
+        target_sub = consumer.connected_substation_id
+        if target_sub in operational_substations:
+            substation_consumers[target_sub].append(consumer)
+            substation_demand[target_sub] += consumer.demand
+        elif (
+            consumer.backup_substation_id
+            and consumer.backup_substation_id in operational_substations
+        ):
+            # Dual-feeder emergency transfer!
+            backup_sub = consumer.backup_substation_id
+            substation_consumers[backup_sub].append(consumer)
+            substation_demand[backup_sub] += consumer.demand
+        else:
+            if target_sub in substation_consumers:
+                substation_consumers[target_sub].append(consumer)
 
     # 3. Determine power supply to each substation
     # Sources include active power stations and active backup generators
@@ -82,19 +94,27 @@ def calculate_load_distribution(network: InfrastructureNetwork) -> SimulationMet
     substation_available_power: Dict[str, float] = {sub.id: 0.0 for sub in network.substations}
     line_flows: Dict[str, float] = {line.id: 0.0 for line in network.transmission_lines}
 
+    rem_source_capacity: Dict[str, float] = {}
+    for ps_id, ps in active_power_stations.items():
+        rem_source_capacity[ps_id] = ps.generation_capacity
+    for bg_id, bg in active_generators.items():
+        rem_source_capacity[bg_id] = bg.current_utilization if bg.current_utilization > 0 else bg.capacity
+
     # Dispatch power from sources to substations using shortest paths
     for sub_id, dem in substation_demand.items():
         if dem <= 0 or sub_id not in G:
             continue
 
-        needed = dem
+        sub_obj = operational_substations[sub_id]
+        needed = min(dem, sub_obj.max_capacity)
+
         # Try to find routes to available sources, sorted by distance/cost
         source_paths = []
         for src_id in all_sources:
-            if src_id in G and nx.has_path(G, src_id, sub_id):
+            if src_id in G and rem_source_capacity.get(src_id, 0.0) > 0.0 and nx.has_path(G, src_id, sub_id):
                 try:
-                    path = nx.shortest_path(G, source=src_id, target=sub_id, weight="weight")
                     cost = nx.shortest_path_length(G, source=src_id, target=sub_id, weight="weight")
+                    path = nx.shortest_path(G, source=src_id, target=sub_id, weight="weight")
                     source_paths.append((cost, src_id, path))
                 except nx.NetworkXNoPath:
                     pass
@@ -102,7 +122,7 @@ def calculate_load_distribution(network: InfrastructureNetwork) -> SimulationMet
         source_paths.sort(key=lambda x: x[0])
 
         for cost, src_id, path in source_paths:
-            if needed <= 0:
+            if needed <= 0 or rem_source_capacity.get(src_id, 0.0) <= 0.0:
                 break
             
             # Determine maximum bottleneck along this path
@@ -118,12 +138,14 @@ def calculate_load_distribution(network: InfrastructureNetwork) -> SimulationMet
                 continue
 
             bottleneck = min(c for _, c in path_edge_caps)
-            transfer_amount = min(needed, bottleneck)
+            src_rem = rem_source_capacity[src_id]
+            transfer_amount = min(needed, bottleneck, src_rem)
 
             if transfer_amount > 0:
                 for line_id, _ in path_edge_caps:
                     line_flows[line_id] += transfer_amount
                 substation_available_power[sub_id] += transfer_amount
+                rem_source_capacity[src_id] -= transfer_amount
                 needed -= transfer_amount
 
     # Update line flows in network model and check overloads
@@ -171,10 +193,12 @@ def calculate_load_distribution(network: InfrastructureNetwork) -> SimulationMet
         load_ratio = sub.current_load / max(1.0, sub.max_capacity)
         sub.temperature = round(40.0 + (load_ratio * 45.0), 1)
 
-        # Update status if overloaded
+        # Update status: preserve DEGRADED if health is low, or flag OVERLOADED
         if sub.current_load >= sub.max_capacity * 1.05:
             sub.operational_status = OperationalStatus.OVERLOADED
-        else:
+        elif sub.health_percentage < 80.0:
+            sub.operational_status = OperationalStatus.DEGRADED
+        elif sub.operational_status != OperationalStatus.FAILED:
             sub.operational_status = OperationalStatus.OPERATIONAL
 
         rem_power = effective_capacity
@@ -209,17 +233,17 @@ def calculate_load_distribution(network: InfrastructureNetwork) -> SimulationMet
     total_gen_dispatched = 0.0
     for ps in network.power_stations:
         if ps.operational_status == OperationalStatus.OPERATIONAL:
-            # Power station supplies connected lines
-            station_flow = sum(l.current_flow for l in network.transmission_lines if l.source_id == ps.id)
-            ps.current_generation = round(min(ps.generation_capacity, station_flow), 2)
+            gen_delivered = ps.generation_capacity - rem_source_capacity.get(ps.id, ps.generation_capacity)
+            ps.current_generation = round(gen_delivered, 2)
             total_gen_dispatched += ps.current_generation
         else:
             ps.current_generation = 0.0
 
     for bg in network.backup_generators:
         if bg.is_active and bg.operational_status == OperationalStatus.OPERATIONAL:
-            bg_flow = sum(l.current_flow for l in network.transmission_lines if l.source_id == bg.id)
-            bg.current_utilization = round(min(bg.capacity, bg_flow), 2)
+            initial_cap = bg.current_utilization if bg.current_utilization > 0 else bg.capacity
+            bg_delivered = initial_cap - rem_source_capacity.get(bg.id, initial_cap)
+            bg.current_utilization = round(bg_delivered, 2)
             total_gen_dispatched += bg.current_utilization
         else:
             bg.current_utilization = 0.0

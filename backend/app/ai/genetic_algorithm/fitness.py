@@ -30,6 +30,7 @@ def evaluate_chromosome_fitness(
     sim_net = copy.deepcopy(network)
 
     # 2. Apply generator dispatches
+    orig_bg_active = {bg.id: bg.is_active for bg in network.backup_generators}
     generators_dispatched_count = 0
     total_generator_mw = 0.0
     total_fuel_cost = 0.0
@@ -39,7 +40,8 @@ def evaluate_chromosome_fitness(
         if target_mw > 0.1 and bg.operational_status != OperationalStatus.FAILED:
             bg.is_active = True
             bg.current_utilization = min(bg.capacity, target_mw)
-            generators_dispatched_count += 1
+            if not orig_bg_active.get(bg.id, False):
+                generators_dispatched_count += 1
             total_generator_mw += bg.current_utilization
             total_fuel_cost += bg.current_utilization * bg.fuel_cost_per_mw
         else:
@@ -47,16 +49,21 @@ def evaluate_chromosome_fitness(
             bg.current_utilization = 0.0
 
     # 3. Apply line switches (cannot reactivate physically FAILED lines)
+    orig_line_status = {l.id: l.operational_status for l in network.transmission_lines}
     line_switches_count = 0
     for line in sim_net.transmission_lines:
         if line.operational_status == OperationalStatus.FAILED:
             continue
         switch_state = chromosome.line_switches.get(line.id, True)
+        orig_status = orig_line_status.get(line.id, OperationalStatus.OPERATIONAL)
         if switch_state:
             line.operational_status = OperationalStatus.OPERATIONAL
-            line_switches_count += 1
+            if orig_status != OperationalStatus.OPERATIONAL:
+                line_switches_count += 1
         else:
             line.operational_status = OperationalStatus.OFFLINE
+            if orig_status == OperationalStatus.OPERATIONAL:
+                line_switches_count += 1
 
     # 4. Apply consumer curtailment to nominal demand
     for cons in sim_net.consumers:

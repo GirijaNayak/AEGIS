@@ -72,7 +72,7 @@ class RecoveryChromosome:
         - Enforces that physically failed components cannot be operated.
         """
         gen_map = {bg.id: bg for bg in network.backup_generators}
-        for bg_id, val in self.generator_dispatch.items():
+        for bg_id, val in list(self.generator_dispatch.items()):
             if bg_id in gen_map:
                 bg = gen_map[bg_id]
                 if bg.operational_status == OperationalStatus.FAILED:
@@ -80,6 +80,8 @@ class RecoveryChromosome:
                 else:
                     max_c = bg.capacity
                     self.generator_dispatch[bg_id] = max(0.0, min(max_c, round(val, 2)))
+            else:
+                self.generator_dispatch[bg_id] = 0.0
 
         for line in network.transmission_lines:
             if line.operational_status == OperationalStatus.FAILED:

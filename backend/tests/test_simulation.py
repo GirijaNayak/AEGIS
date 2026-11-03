@@ -54,7 +54,7 @@ def test_substation_failure_disconnects_connected_lines():
     for l in sub3_lines:
         assert l.operational_status == OperationalStatus.FAILED
 
-    # Consumers attached to SUB3 (like HOSP1 and IND2) should have unserved demand
-    hosp1 = next(c for c in network.consumers if c.id == "HOSP1")
-    assert hosp1.supplied_power == 0.0
+    # Consumers attached to SUB3 without backup (IND2) lose power
+    ind2 = next(c for c in network.consumers if c.id == "IND2")
+    assert ind2.supplied_power == 0.0
     assert metrics.unserved_demand > 0.0
